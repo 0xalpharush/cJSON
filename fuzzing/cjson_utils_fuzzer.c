@@ -12,7 +12,8 @@ extern "C" {
 int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size); /* required by C89 */
 
 /* The input is two NUL-terminated strings: a JSON document and a second
- * string that is used both as a JSON document and as a JSON pointer. */
+ * string that is used both as a JSON document and as a JSON pointer into
+ * the first. */
 int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 {
     const char *first;
@@ -22,6 +23,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     cJSON *to;
     cJSON *copy;
     cJSON *patches;
+    cJSON *pointed;
     char *pointer;
 
     if(size < 2) return 0;
@@ -37,6 +39,15 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 
     cJSONUtils_GetPointer(from, second);
     cJSONUtils_GetPointerCaseSensitive(from, second);
+
+    /* a merge patch that is part of its own target, see #1060 */
+    copy = cJSON_Duplicate(from, 1);
+    pointed = cJSONUtils_GetPointer(copy, second);
+    if(pointed != NULL)
+    {
+        copy = cJSONUtils_MergePatch(copy, pointed);
+    }
+    cJSON_Delete(copy);
 
     to = cJSON_Parse(second);
     if(to == NULL)
