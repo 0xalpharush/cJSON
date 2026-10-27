@@ -40,14 +40,25 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     cJSONUtils_GetPointer(from, second);
     cJSONUtils_GetPointerCaseSensitive(from, second);
 
-    /* a merge patch that is part of its own target, see #1060 */
-    copy = cJSON_Duplicate(from, 1);
-    pointed = cJSONUtils_GetPointer(copy, second);
+    /* the item the pointer selects, as the second argument of the functions
+     * that take two documents: it is part of the first */
+    pointed = cJSONUtils_GetPointer(from, second);
     if(pointed != NULL)
     {
-        copy = cJSONUtils_MergePatch(copy, pointed);
+        pointer = cJSONUtils_FindPointerFromObjectTo(from, pointed);
+        if(pointer != NULL) free(pointer);
+        patches = cJSONUtils_GeneratePatches(from, pointed);
+        cJSON_Delete(patches);
+        patches = cJSONUtils_GenerateMergePatch(from, pointed);
+        cJSON_Delete(patches);
+
+        copy = cJSON_Duplicate(from, 1);
+        copy = cJSONUtils_MergePatch(copy, cJSONUtils_GetPointer(copy, second));
+        cJSON_Delete(copy);
+        copy = cJSON_Duplicate(from, 1);
+        cJSONUtils_ApplyPatches(copy, cJSONUtils_GetPointer(copy, second));
+        cJSON_Delete(copy);
     }
-    cJSON_Delete(copy);
 
     to = cJSON_Parse(second);
     if(to == NULL)
@@ -82,12 +93,6 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     cJSON_Delete(copy);
     copy = cJSONUtils_MergePatchCaseSensitive(cJSON_Duplicate(from, 1), to);
     cJSON_Delete(copy);
-
-    if(from->child != NULL)
-    {
-        pointer = cJSONUtils_FindPointerFromObjectTo(from, from->child);
-        if(pointer != NULL) free(pointer);
-    }
 
     cJSONUtils_SortObject(from);
     cJSONUtils_SortObjectCaseSensitive(to);
